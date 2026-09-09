@@ -1,4 +1,4 @@
-name: 🚀 Enterprise DevOps Pipeline
+name: CI/CD Pipeline
 
 on:
   push:
@@ -18,11 +18,8 @@ permissions:
   security-events: write
 
 jobs:
-  # ==========================================
-  # 1. SETUP & CACHE COMPARTILHADO
-  # ==========================================
   setup:
-    name: 🏗️ Setup & Dependencies
+    name: Setup Dependencies
     runs-on: ubuntu-latest
     outputs:
       cache-key: ${{ steps.cache-npm.outputs.cache-hit }}
@@ -48,11 +45,8 @@ jobs:
       - name: Install Dependencies
         run: npm ci --prefer-offline
 
-  # ==========================================
-  # 2. QUALIDADE, TESTES E SEGURANÇA (PARALELO)
-  # ==========================================
   lint:
-    name: 🧹 Code Quality (ESLint)
+    name: Code Quality
     needs: setup
     runs-on: ubuntu-latest
     steps:
@@ -66,7 +60,7 @@ jobs:
         run: npm run lint
 
   security-audit:
-    name: 🛡️ Security Audit & Vulnerabilities
+    name: Security Audit
     needs: setup
     runs-on: ubuntu-latest
     steps:
@@ -80,7 +74,7 @@ jobs:
         run: npm audit --audit-level=high
 
   matrix-test:
-    name: 🧪 Unit Tests (${{ matrix.os }} - Node ${{ matrix.node }})
+    name: Unit Tests (${{ matrix.os }} - Node ${{ matrix.node }})
     needs: setup
     runs-on: ${{ matrix.os }}
     strategy:
@@ -105,11 +99,8 @@ jobs:
           name: code-coverage-report
           path: coverage/
 
-  # ==========================================
-  # 3. COMPILAÇÃO E ARTEFATOS (BUILD)
-  # ==========================================
   build:
-    name: 📦 Build Application & Artifacts
+    name: Build Application
     needs: [lint, security-audit, matrix-test]
     runs-on: ubuntu-latest
     steps:
@@ -121,7 +112,6 @@ jobs:
       - run: npm ci
       - name: Build Web Assets
         run: |
-          # Adicione aqui seu comando de build se possuir (ex: npm run build)
           mkdir -p dist
           cp -r *.html *.css *.js dist/ 2>/dev/null || true
       - name: Upload Build Artifact
@@ -131,11 +121,8 @@ jobs:
           path: dist/
           retention-days: 7
 
-  # ==========================================
-  # 4. DEPLOY MULTI-ENVIRONMENT
-  # ==========================================
   deploy-dev:
-    name: 🚀 Deploy -> Development
+    name: Deploy Development
     needs: build
     if: github.ref == 'refs/heads/develop'
     runs-on: ubuntu-latest
@@ -146,10 +133,10 @@ jobs:
         with:
           name: production-build
       - name: Deploy to Dev Server
-        run: echo "Deploy efetuado no ambiente de Desenvolvimento!"
+        run: echo "Deploy efetuado no ambiente de Desenvolvimento."
 
   deploy-staging:
-    name: 🔷 Deploy -> Staging (Homologação)
+    name: Deploy Staging
     needs: build
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
@@ -160,18 +147,18 @@ jobs:
         with:
           name: production-build
       - name: Deploy to Staging
-        run: echo "Deploy efetuado no ambiente de Homologação!"
+        run: echo "Deploy efetuado no ambiente de Homologação."
 
   smoke-tests:
-    name: 🔍 Post-Deploy Smoke Tests
+    name: Post-Deploy Smoke Tests
     needs: deploy-staging
     runs-on: ubuntu-latest
     steps:
       - name: Run E2E Health Checks
-        run: echo "Todos os serviços de Staging estão operacionais!"
+        run: echo "Todos os serviços de Staging estão operacionais."
 
   deploy-prod:
-    name: 🌟 Deploy -> Production
+    name: Deploy Production
     needs: smoke-tests
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
@@ -182,23 +169,20 @@ jobs:
         with:
           name: production-build
       - name: Deploy to Production
-        run: echo "Deploy em Produção realizado com sucesso!"
+        run: echo "Deploy em Produção realizado com sucesso."
 
-  # ==========================================
-  # 5. SUMÁRIO DA EXECUÇÃO (JOB SUMMARY)
-  # ==========================================
   workflow-summary:
-    name: 📊 Pipeline Summary
+    name: Pipeline Summary
     needs: [deploy-prod]
     if: always()
     runs-on: ubuntu-latest
     steps:
       - name: Generate Summary Report
         run: |
-          echo "## 📈 Relatório do Execution Flow" >> $GITHUB_STEP_SUMMARY
+          echo "## Relatório de Execução" >> $GITHUB_STEP_SUMMARY
           echo "* **Trigger:** ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
           echo "* **Branch:** ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
           echo "* **Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
           echo "### Status das Etapas:" >> $GITHUB_STEP_SUMMARY
-          echo "- Build & Tests: Completo ✅" >> $GITHUB_STEP_SUMMARY
-          echo "- Pipeline Status: Concluído com Sucesso 🎉" >> $GITHUB_STEP_SUMMARY
+          echo "- Build & Tests: Concluído" >> $GITHUB_STEP_SUMMARY
+          echo "- Status Geral: Finalizado" >> $GITHUB_STEP_SUMMARY
