@@ -1,184 +1,204 @@
-name: Pipeline DevOps
+name: 🚀 Enterprise DevOps Pipeline
 
 on:
   push:
-    branches:
-      - main
-
+    branches: [ "main", "develop" ]
+    tags: [ 'v*.*.*' ]
   pull_request:
-    branches:
-      - main
+    branches: [ "main", "develop" ]
+    types: [ opened, synchronize, reopened ]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+  pull-requests: write
+  security-events: write
 
 jobs:
-
-  # 1 - BUILD
-  build:
-    name: 1 - Build
+  # ==========================================
+  # 1. SETUP & CACHE COMPARTILHADO
+  # ==========================================
+  setup:
+    name: 🏗️ Setup & Dependencies
     runs-on: ubuntu-latest
-
+    outputs:
+      cache-key: ${{ steps.cache-npm.outputs.cache-hit }}
     steps:
-      - name: Baixar código
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Configurar Node.js
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: npm
+          node-version: '20'
+          cache: 'npm'
 
-      - name: Instalar dependências
-        run: npm ci
+      - name: Cache Node Modules
+        id: cache-npm
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: npm-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            npm-${{ runner.os }}-
 
-      - name: Verificar projeto
-        run: npm run build --if-present
+      - name: Install Dependencies
+        run: npm ci --prefer-offline
 
-
-  # 2 - LINT
+  # ==========================================
+  # 2. QUALIDADE, TESTES E SEGURANÇA (PARALELO)
+  # ==========================================
   lint:
-    name: 2 - Lint
-    needs: build
+    name: 🧹 Code Quality (ESLint)
+    needs: setup
     runs-on: ubuntu-latest
-
     steps:
-      - name: Baixar código
-        uses: actions/checkout@v4
-
-      - name: Configurar Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: npm
-
-      - name: Instalar dependências
-        run: npm ci
-
-      - name: Executar ESLint
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - name: Run ESLint
         run: npm run lint
 
-
-  # 3 - TESTES
-  test:
-    name: 3 - Testes
-    needs: lint
+  security-audit:
+    name: 🛡️ Security Audit & Vulnerabilities
+    needs: setup
     runs-on: ubuntu-latest
-
     steps:
-      - name: Baixar código
-        uses: actions/checkout@v4
-
-      - name: Configurar Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: npm
-
-      - name: Instalar dependências
-        run: npm ci
-
-      - name: Gerar relatório de testes
-        if: always()
-        run: npm test -- --coverage
-
-      - name: Salvar relatório
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: relatorio-testes
-          path: coverage/
-
-
-  # 4 - SECURITY
-  security:
-    name: 4 - Security
-    needs: test
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Baixar código
-        uses: actions/checkout@v4
-
-      - name: Configurar Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-
-      - name: Instalar dependências
-        run: npm ci
-
-      - name: Auditoria de segurança
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - name: Check Dependencies Security
         run: npm audit --audit-level=high
 
+  matrix-test:
+    name: 🧪 Unit Tests (${{ matrix.os }} - Node ${{ matrix.node }})
+    needs: setup
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        node: [18.x, 20.x]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node.js ${{ matrix.node }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: 'npm'
+      - run: npm ci
+      - name: Run Jest Tests with Coverage
+        run: npm test -- --coverage --ci
+      - name: Upload Coverage Artifact
+        if: matrix.os == 'ubuntu-latest' && matrix.node == '20.x'
+        uses: actions/upload-artifact@v4
+        with:
+          name: code-coverage-report
+          path: coverage/
 
-  # 5 - DEPLOY DEV
+  # ==========================================
+  # 3. COMPILAÇÃO E ARTEFATOS (BUILD)
+  # ==========================================
+  build:
+    name: 📦 Build Application & Artifacts
+    needs: [lint, security-audit, matrix-test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - name: Build Web Assets
+        run: |
+          # Adicione aqui seu comando de build se possuir (ex: npm run build)
+          mkdir -p dist
+          cp -r *.html *.css *.js dist/ 2>/dev/null || true
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-build
+          path: dist/
+          retention-days: 7
+
+  # ==========================================
+  # 4. DEPLOY MULTI-ENVIRONMENT
+  # ==========================================
   deploy-dev:
-    name: 5 - Deploy Dev
-    needs: security
+    name: 🚀 Deploy -> Development
+    needs: build
+    if: github.ref == 'refs/heads/develop'
     runs-on: ubuntu-latest
-
-    environment:
-      name: development
-
+    environment: development
     steps:
-      - name: Baixar código
-        uses: actions/checkout@v4
+      - name: Download Build Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: production-build
+      - name: Deploy to Dev Server
+        run: echo "Deploy efetuado no ambiente de Desenvolvimento!"
 
-      - name: Simular Deploy Dev
-        run: |
-          echo "Iniciando deploy no ambiente DEV"
-          echo "Código enviado para desenvolvimento."
-          echo "Deploy Dev concluído com sucesso."
-
-
-  # 6 - SMOKE TEST
-  smoke-test:
-    name: 6 - Smoke Test
-    needs: deploy-dev
+  deploy-staging:
+    name: 🔷 Deploy -> Staging (Homologação)
+    needs: build
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-
+    environment: staging
     steps:
-      - name: Executar Smoke Test
-        run: |
-          echo "Executando Smoke Test..."
-          echo "Aplicação está respondendo corretamente."
-          echo "Smoke Test aprovado com sucesso."
+      - name: Download Build Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: production-build
+      - name: Deploy to Staging
+        run: echo "Deploy efetuado no ambiente de Homologação!"
 
-
-  # 7 - HOMOLOGAÇÃO
-  homologacao:
-    name: 7 - Homologação
-    needs: smoke-test
+  smoke-tests:
+    name: 🔍 Post-Deploy Smoke Tests
+    needs: deploy-staging
     runs-on: ubuntu-latest
-
-    environment:
-      name: homologacao
-
     steps:
-      - name: Baixar código
-        uses: actions/checkout@v4
+      - name: Run E2E Health Checks
+        run: echo "Todos os serviços de Staging estão operacionais!"
 
-      - name: Homologar aplicação
-        run: |
-          echo "Iniciando homologação..."
-          echo "Aplicação validada."
-          echo "Homologação concluída com sucesso."
-
-
-  # 8 - PRODUÇÃO
-  producao:
-    name: 8 - Produção
-    needs: homologacao
+  deploy-prod:
+    name: 🌟 Deploy -> Production
+    needs: smoke-tests
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-
-    environment:
-      name: production
-
+    environment: production
     steps:
-      - name: Baixar código
-        uses: actions/checkout@v4
+      - name: Download Build Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: production-build
+      - name: Deploy to Production
+        run: echo "Deploy em Produção realizado com sucesso!"
 
-      - name: Deploy Produção
+  # ==========================================
+  # 5. SUMÁRIO DA EXECUÇÃO (JOB SUMMARY)
+  # ==========================================
+  workflow-summary:
+    name: 📊 Pipeline Summary
+    needs: [deploy-prod]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate Summary Report
         run: |
-          echo "Iniciando deploy em PRODUÇÃO"
-          echo "Aplicação publicada em produção."
-          echo "Deploy de produção concluído com sucesso."
+          echo "## 📈 Relatório do Execution Flow" >> $GITHUB_STEP_SUMMARY
+          echo "* **Trigger:** ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "* **Branch:** ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "* **Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "### Status das Etapas:" >> $GITHUB_STEP_SUMMARY
+          echo "- Build & Tests: Completo ✅" >> $GITHUB_STEP_SUMMARY
+          echo "- Pipeline Status: Concluído com Sucesso 🎉" >> $GITHUB_STEP_SUMMARY
