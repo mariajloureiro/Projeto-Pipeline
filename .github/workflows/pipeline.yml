@@ -1,4 +1,5 @@
-name: Pipeline CI/CD
+name: Pipeline DevOps
+
 on:
   push:
     branches:
@@ -10,273 +11,174 @@ on:
 
 jobs:
 
-  # ==========================================
-  # 1. BUILD
-  # ==========================================
-
+  # 1 - BUILD
   build:
-    name: Build
+    name: 1 - Build
     runs-on: ubuntu-latest
 
     steps:
-
       - name: Baixar código
         uses: actions/checkout@v4
 
       - name: Configurar Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 20
+          cache: npm
 
       - name: Instalar dependências
-        run: npm install
+        run: npm ci
 
-      - name: Verificar arquivos
-        run: |
-          test -f index.html
-          test -f style.css
-          test -f script.js
-
-          echo "Build concluído com sucesso!"
+      - name: Verificar projeto
+        run: npm run build --if-present
 
 
-  # ==========================================
-  # 2. TEST
-  # ==========================================
-
-  test:
-    name: Test
-    runs-on: ubuntu-latest
-
+  # 2 - LINT
+  lint:
+    name: 2 - Lint
     needs: build
-
-    steps:
-
-      - name: Baixar código
-        uses: actions/checkout@v4
-
-      - name: Configurar Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-
-      - name: Instalar dependências
-        run: npm install
-
-      - name: Executar testes
-        run: npm test
-
-
-  # ==========================================
-  # 3. QUALITY
-  # ==========================================
-
-  quality:
-    name: Quality
     runs-on: ubuntu-latest
 
-    needs: test
-
     steps:
-
       - name: Baixar código
         uses: actions/checkout@v4
 
       - name: Configurar Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 20
+          cache: npm
 
       - name: Instalar dependências
-        run: npm install
+        run: npm ci
 
-      - name: Executar análise de qualidade
+      - name: Executar ESLint
         run: npm run lint
 
 
-  # ==========================================
-  # 4. SECURITY
-  # ==========================================
-
-  security:
-    name: Security
+  # 3 - TESTES
+  test:
+    name: 3 - Testes
+    needs: lint
     runs-on: ubuntu-latest
 
-    needs: quality
-
     steps:
-
       - name: Baixar código
         uses: actions/checkout@v4
 
       - name: Configurar Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 20
+          cache: npm
 
       - name: Instalar dependências
-        run: npm install
+        run: npm ci
 
-      - name: Verificar vulnerabilidades
-        run: npm audit --audit-level=high
+      - name: Gerar relatório de testes
+        if: always()
+        run: npm test -- --coverage
+
+      - name: Salvar relatório
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: relatorio-testes
+          path: coverage/
 
 
-  # ==========================================
-  # 5. PACKAGE
-  # ==========================================
-
-  package:
-    name: Package
+  # 4 - SECURITY
+  security:
+    name: 4 - Security
+    needs: test
     runs-on: ubuntu-latest
 
-    needs: security
-
     steps:
-
       - name: Baixar código
         uses: actions/checkout@v4
 
-      - name: Criar pacote
-        run: |
-          mkdir -p dist
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
 
-          cp index.html dist/
-          cp style.css dist/
-          cp script.js dist/
+      - name: Instalar dependências
+        run: npm ci
 
-          echo "Pacote criado com sucesso!"
-
-      - name: Verificar pacote
-        run: |
-          test -f dist/index.html
-          test -f dist/style.css
-          test -f dist/script.js
+      - name: Auditoria de segurança
+        run: npm audit --audit-level=high
 
 
-  # ==========================================
-  # 6. DEPLOY
-  # ==========================================
-
-  deploy:
-    name: Deploy
+  # 5 - DEPLOY DEV
+  deploy-dev:
+    name: 5 - Deploy Dev
+    needs: security
     runs-on: ubuntu-latest
 
-    needs: package
+    environment:
+      name: development
 
     steps:
+      - name: Baixar código
+        uses: actions/checkout@v4
 
-      - name: Deploy em desenvolvimento
+      - name: Simular Deploy Dev
         run: |
-          echo "Realizando deploy no ambiente DEV..."
-          echo "Deploy DEV concluído!"
+          echo "Iniciando deploy no ambiente DEV"
+          echo "Código enviado para desenvolvimento."
+          echo "Deploy Dev concluído com sucesso."
 
 
-  # ==========================================
-  # 7. SMOKE TEST
-  # ==========================================
-
+  # 6 - SMOKE TEST
   smoke-test:
-    name: Smoke Test
+    name: 6 - Smoke Test
+    needs: deploy-dev
     runs-on: ubuntu-latest
 
-    needs: deploy
-
     steps:
-
       - name: Executar Smoke Test
         run: |
-          echo "Verificando aplicação..."
-          echo "Aplicação está funcionando!"
-          echo "Smoke Test aprovado!"
+          echo "Executando Smoke Test..."
+          echo "Aplicação está respondendo corretamente."
+          echo "Smoke Test aprovado com sucesso."
 
 
-  # ==========================================
-  # 8. PERFORMANCE
-  # ==========================================
-
-  performance:
-    name: Performance
-    runs-on: ubuntu-latest
-
+  # 7 - HOMOLOGAÇÃO
+  homologacao:
+    name: 7 - Homologação
     needs: smoke-test
-
-    steps:
-
-      - name: Executar teste de performance
-        run: |
-          echo "Executando teste de performance..."
-          echo "Performance aprovada!"
-
-
-  # ==========================================
-  # 9. APPROVAL
-  # ==========================================
-
-  approval:
-    name: Approval
     runs-on: ubuntu-latest
 
-    needs: performance
+    environment:
+      name: homologacao
 
     steps:
+      - name: Baixar código
+        uses: actions/checkout@v4
 
-      - name: Aprovação para produção
+      - name: Homologar aplicação
         run: |
-          echo "Aplicação aprovada para produção!"
+          echo "Iniciando homologação..."
+          echo "Aplicação validada."
+          echo "Homologação concluída com sucesso."
 
 
-  # ==========================================
-  # 10. RELEASE
-  # ==========================================
-
-  release:
-    name: Release
+  # 8 - PRODUÇÃO
+  producao:
+    name: 8 - Produção
+    needs: homologacao
     runs-on: ubuntu-latest
 
-    needs: approval
+    environment:
+      name: production
 
     steps:
+      - name: Baixar código
+        uses: actions/checkout@v4
 
-      - name: Criar release
+      - name: Deploy Produção
         run: |
-          echo "Criando nova versão..."
-          echo "Release criada com sucesso!"
-
-
-  # ==========================================
-  # 11. MONITORING
-  # ==========================================
-
-  monitoring:
-    name: Monitoring
-    runs-on: ubuntu-latest
-
-    needs: release
-
-    steps:
-
-      - name: Monitorar aplicação
-        run: |
-          echo "Monitorando aplicação..."
-          echo "Aplicação funcionando normalmente!"
-
-
-  # ==========================================
-  # 12. ROLLBACK
-  # ==========================================
-
-  rollback:
-    name: Rollback
-    runs-on: ubuntu-latest
-
-    needs: monitoring
-
-    if: failure()
-
-    steps:
-
-      - name: Executar rollback
-        run: |
-          echo "Problema detectado!"
-          echo "Executando rollback..."
-          echo "Rollback concluído!"
+          echo "Iniciando deploy em PRODUÇÃO"
+          echo "Aplicação publicada em produção."
+          echo "Deploy de produção concluído com sucesso."

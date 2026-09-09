@@ -2,6 +2,10 @@ const globals = require("globals");
 
 module.exports = [
     {
+        ignores: ["coverage/**"]
+    },
+
+    {
         files: ["**/*.js"],
 
         languageOptions: {
