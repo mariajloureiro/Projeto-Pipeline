@@ -25,7 +25,12 @@ Aplicar conceitos práticos de **DevOps** e **CI/CD** por meio do GitHub Actions
 - **Controle de Versão & Automação:** Git, GitHub, GitHub Actions
 
 ---
+## 📁 Documentação e Pesquisa (`/docs`)
 
+A pasta [`docs/`](./docs) reúne a documentação técnica das entregas e estudos realizados no projeto:
+
+- **Automação e Configuração de Gatilhos:** Detalhamento da integração da pipeline de CI/CD ao projeto via GitHub Actions, configurada para ser executada automaticamente a cada novo `push` na branch principal (`main`).
+- **Análise Comparativa de Repositórios:** Pesquisa e estudo analítico de **3 repositórios do GitHub** que utilizam pipelines de CI/CD, destacando e comparando suas características técnicas, funcionalidades, gatilhos de acionamento (`triggers`) e histórico de execuções.
 ## 🔄 Fluxo da Pipeline (CI/CD)
 
 A pipeline é acionada a cada `push` na branch `main` e executa as seguintes etapas (incluindo verificações em paralelo):
