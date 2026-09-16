@@ -2,20 +2,8 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches: [ "main", "develop" ]
-    tags: [ 'v*.*.*' ]
-  pull_request:
-    branches: [ "main", "develop" ]
-    types: [ opened, synchronize, reopened ]
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
-permissions:
-  contents: write
-  pull-requests: write
-  security-events: write
+    branches:
+      - main
 
 jobs:
   setup:
