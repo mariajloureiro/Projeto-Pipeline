@@ -28,25 +28,23 @@ Aplicar conceitos práticos de **DevOps** e **CI/CD** por meio do GitHub Actions
 
 ## 🔄 Fluxo da Pipeline (CI/CD)
 
-A pipeline automatizada no GitHub Actions executa as seguintes etapas sequenciais:
+A pipeline é acionada a cada `push` na branch `main` e executa as seguintes etapas (incluindo verificações em paralelo):
 
 ```text
-       [ Setup ]
-           ↓
-    [ Code Quality ]
-           ↓
-   [ Security Audit ]
-           ↓
-     [ Unit Tests ]
-           ↓
-        [ Build ]
-           ↓
-  [ Deploy Development ]
-           ↓
-    [ Deploy Staging ]
-           ↓
-     [ Smoke Tests ]
-           ↓
-   [ Deploy Production ]
-           ↓
-   [ Pipeline Summary ]
+                           [ Setup ]
+                               ↓
+         ┌─────────────────────┼─────────────────────┐
+         ↓                     ↓                     ↓
+  [ Code Quality ]     [ Security Audit ]     [ Unit Tests ]
+  (npm run lint)     (npm audit --high)    (Jest Matrix OS/Node)
+         └─────────────────────┬─────────────────────┘
+                               ↓
+                           [ Build ]
+                               ↓
+                      [ Deploy Staging ]
+                               ↓
+                         [ Smoke Tests ]
+                               ↓
+                      [ Deploy Production ]
+                               ↓
+                      [ Pipeline Summary ]
